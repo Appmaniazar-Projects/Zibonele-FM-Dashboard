@@ -140,7 +140,14 @@ export const subscribeToEvents = (callback: (events: Event[]) => void) => {
 
   const setupSubscription = async () => {
     const { db } = await getFirebaseInstances()
-    const { ref, onValue, off } = await import("firebase/database")
+    
+    if (!db) {
+      console.error("❌ No database instance available for events subscription")
+      callback([])
+      return () => {} // Return no-op cleanup function
+    }
+    
+    const { ref, onValue } = await import("firebase/database")
 
     const eventsRef = ref(db, EVENTS_PATH)
 
@@ -186,7 +193,8 @@ export const subscribeToEvents = (callback: (events: Event[]) => void) => {
     )
 
     return () => {
-      off(eventsRef, "value", unsubscribe)
+      console.log("🔌 Cleaning up events subscription...")
+      unsubscribe()
     }
   }
 

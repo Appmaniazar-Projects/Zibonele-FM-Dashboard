@@ -166,15 +166,44 @@ const createMockAuth = () => ({
 const mockAuth = createMockAuth()
 
 // Helper function to get Firebase instances
+// Cache the promise to prevent multiple simultaneous initializations
+let initializationPromise: Promise<any> | null = null
+
 export const getFirebaseInstances = async () => {
   try {
-    // First try to initialize if not already done
-    if (!isInitialized) {
-      const result = await initializeFirebase()
+    // If already initialized, return immediately
+    if (isInitialized && app && (auth || db)) {
+      return {
+        db: db,
+        auth: auth || mockAuth,
+        storage: storage,
+        isUsingRealFirebase: !!auth,
+        isUsingRealDatabase: !!db,
+      }
+    }
+
+    // If initialization is in progress, wait for it
+    if (initializationPromise) {
+      await initializationPromise
+      return {
+        db: db,
+        auth: auth || mockAuth,
+        storage: storage,
+        isUsingRealFirebase: !!auth,
+        isUsingRealDatabase: !!db,
+      }
+    }
+
+    // Start initialization
+    initializationPromise = initializeFirebase().then((result) => {
+      initializationPromise = null
       if (!result.success) {
         console.warn("⚠️ Firebase initialization had issues but continuing with available services")
       }
-    }
+      return result
+    })
+
+    await initializationPromise
 
     // Return whatever instances we have, even if initialization wasn't fully successful
     return {
@@ -185,6 +214,7 @@ export const getFirebaseInstances = async () => {
       isUsingRealDatabase: !!db,
     }
   } catch (error) {
+    initializationPromise = null
     console.warn("⚠️ Continuing with limited functionality:", error)
     // Return mock auth and null db when there's an error
     return {

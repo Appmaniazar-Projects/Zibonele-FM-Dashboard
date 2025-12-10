@@ -1,13 +1,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
-    ignoreDuringBuilds: true,
+    // Only ignore during builds in production, show warnings in dev
+    ignoreDuringBuilds: process.env.NODE_ENV === 'production',
   },
   typescript: {
-    ignoreBuildErrors: true,
+    // Only ignore during builds in production, show errors in dev
+    ignoreBuildErrors: process.env.NODE_ENV === 'production',
   },
   images: {
     unoptimized: true,
+  },
+  // Improve build performance
+  swcMinify: true,
+  // Reduce memory usage
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
 }
 

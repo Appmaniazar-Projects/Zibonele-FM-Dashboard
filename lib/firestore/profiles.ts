@@ -29,8 +29,13 @@ export const addProfile = async (profileData: Omit<Profile, "id" | "createdAt" |
     const profilesRef = ref(db, PROFILES_PATH)
     const newProfileRef = push(profilesRef)
 
+    // Ensure both name and author fields are set for compatibility
     const profileWithTimestamps = {
       ...profileData,
+      // Set author field to match database structure (app uses author field)
+      author: profileData.name || profileData.author || "",
+      // Keep name field as well for dashboard compatibility
+      name: profileData.name || profileData.author || "",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }
@@ -52,10 +57,15 @@ export const updateProfile = async (id: string, profileData: Partial<Profile>) =
     
     const profileRef = ref(db, `${PROFILES_PATH}/${id}`)
     
-    await update(profileRef, {
+    // Ensure both name and author fields are set for compatibility
+    const updateData = {
       ...profileData,
+      // Update author field if name is being updated
+      ...(profileData.name && { author: profileData.name }),
       updatedAt: serverTimestamp(),
-    })
+    }
+    
+    await update(profileRef, updateData)
     
     console.log("✅ Realtime Database: Profile updated successfully")
   } catch (error) {
@@ -113,11 +123,8 @@ export const getProfiles = async (): Promise<Profile[]> => {
       })
     }
 
-    // Sort by creation time
+    // Sort alphabetically by name
     profiles.sort((a, b) => {
-      if (a.createdAt && b.createdAt) {
-        return b.createdAt - a.createdAt
-      }
       return (a.name || "").localeCompare(b.name || "")
     })
 
@@ -158,7 +165,7 @@ export const subscribeToProfiles = (callback: (profiles: Profile[]) => void) => 
       }
 
       console.log("5. Importing Firebase database functions...")
-      const { ref, onValue, off } = await import("firebase/database")
+      const { ref, onValue } = await import("firebase/database")
       console.log("6. Firebase database functions imported")
 
       const profilesRef = ref(db, PROFILES_PATH)
@@ -173,10 +180,28 @@ export const subscribeToProfiles = (callback: (profiles: Profile[]) => void) => 
             const profilesData = snapshot.val() || {}
             console.log("10. Raw profiles data:", profilesData)
             
+            // Normalize the data to match getProfiles format
             const profilesList: Profile[] = Object.entries(profilesData).map(([id, data]: [string, any]) => ({
               id,
-              ...data,
-            }))
+              name: data.name || data.author || "",
+              author: data.author || data.name || "",
+              schedule: data.schedule || "",
+              bio: data.bio || "",
+              email: data.email || "",
+              phone: data.phone || "",
+              role: data.role || "",
+              imageUrl: data.imageUrl || "",
+              socialMedia: data.socialMedia || {},
+              shows: data.shows || [],
+              isActive: data.isActive !== undefined ? data.isActive : true,
+              createdAt: data.createdAt,
+              updatedAt: data.updatedAt,
+            } as Profile))
+            
+            // Sort alphabetically by name (same as getProfiles)
+            profilesList.sort((a, b) => {
+              return (a.name || "").localeCompare(b.name || "")
+            })
             
             console.log(`11. Processed ${profilesList.length} profiles`)
             callback(profilesList)
@@ -195,7 +220,7 @@ export const subscribeToProfiles = (callback: (profiles: Profile[]) => void) => 
       unsubscribe = () => {
         console.log("12. Unsubscribing from profiles...")
         try {
-          off(profilesRef, 'value', unsubscribeFn)
+          unsubscribeFn()
           console.log("13. Successfully unsubscribed")
         } catch (err) {
           console.error("❌ Error in unsubscribe:", err)

@@ -247,13 +247,16 @@ export default function PresentersPage() {
                     <CardHeader>
                       <div className="flex items-start space-x-4">
                         <Avatar className="h-16 w-16">
-                          <AvatarImage src={presenter.imageUrl || "/placeholder.svg"} alt={presenter.name} />
+                          {presenter.imageUrl ? (
+                            <AvatarImage src={presenter.imageUrl} alt={presenter.name} />
+                          ) : null}
                           <AvatarFallback className="bg-radio-gold text-radio-black font-semibold">
                             {presenter.name
                               .split(" ")
                               .map((n) => n[0])
                               .join("")
-                              .toUpperCase()}
+                              .toUpperCase()
+                              .slice(0, 2)}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
@@ -272,10 +275,12 @@ export default function PresentersPage() {
                         <p className="text-sm text-white/80 line-clamp-3">{presenter.bio}</p>
 
                         <div className="space-y-2">
-                          <div className="flex items-center space-x-2 text-sm">
-                            <Mail className="h-4 w-4 text-radio-gold" />
-                            <span>{presenter.email}</span>
-                          </div>
+                          {presenter.email && (
+                            <div className="flex items-center space-x-2 text-sm">
+                              <Mail className="h-4 w-4 text-radio-gold" />
+                              <span>{presenter.email}</span>
+                            </div>
+                          )}
                           {presenter.phone && (
                             <div className="flex items-center space-x-2 text-sm">
                               <Phone className="h-4 w-4 text-radio-gold" />
@@ -371,7 +376,7 @@ export default function PresentersPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
                     type="email"
@@ -379,7 +384,6 @@ export default function PresentersPage() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="bg-white/10 border-white/20 text-white"
-                    required
                     disabled={submitting}
                   />
                 </div>

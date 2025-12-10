@@ -2,7 +2,7 @@
 
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Calendar, Mic, Users, Settings, Plus, BarChart3, Database, Wifi } from "lucide-react"
+import { Calendar, Mic, Users, Settings, Plus, BarChart3 } from "lucide-react"
 import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { useEffect, useState } from "react"
@@ -13,7 +13,19 @@ import { useAuth } from "@/components/auth/auth-provider"
 import { FloatingActionButton } from "@/components/floating-action-button"
 
 export default function Dashboard() {
-  const { user, isUsingRealFirebase } = useAuth()
+  const { user } = useAuth()
+  
+  // Get first name from user
+  const getFirstName = () => {
+    if (user?.displayName) {
+      return user.displayName.split(" ")[0]
+    }
+    if (user?.email) {
+      return user.email.split("@")[0].split(".")[0]
+    }
+    return "User"
+  }
+  
   const [stats, setStats] = useState({
     shows: 0,
     presenters: 0,
@@ -100,40 +112,12 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div className="flex flex-1 flex-col">
-        <DashboardHeader userName={user?.displayName || user?.email?.split("@")[0] || "Staff"} />
+        <DashboardHeader />
 
         <div className="flex-1 p-6 bg-radio-gray">
-          {/* Connection Status */}
-          <div className="mb-6">
-            <Card className="bg-white/10 border-white/20 text-white">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-3 h-3 rounded-full ${isUsingRealFirebase ? "bg-green-500" : "bg-yellow-500"}`}
-                    ></div>
-                    <div>
-                      <p className="font-medium">{isUsingRealFirebase ? "Connected to Firebase" : "Demo Mode"}</p>
-                      <p className="text-sm text-white/70">
-                        {isUsingRealFirebase ? "Real-time data sync active" : "Using mock data"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {isUsingRealFirebase ? (
-                      <Wifi className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <Database className="h-5 w-5 text-yellow-500" />
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Welcome Section */}
           <div className="mb-8">
-            <h2 className="text-3xl font-bold text-white mb-2">Radio Management Dashboard</h2>
+            <h2 className="text-3xl font-bold text-white mb-2">Welcome, {getFirstName()}</h2>
             <p className="text-white/70 text-lg">Manage shows, presenters, and events for your mobile app</p>
           </div>
 
