@@ -11,8 +11,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Improve build performance
-  swcMinify: true,
   // Reduce memory usage
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
