@@ -1,12 +1,15 @@
 "use client"
 
 import type * as React from "react"
-import { Calendar, Settings, Users, LogOut, Menu, Home } from "lucide-react"
+import { Calendar, Settings, Users, Menu, Home, LogOut, AlertCircle } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useState } from "react"
-import { firebaseAuth } from "@/lib/firebase"
+import { getFirebaseInstances } from "@/lib/firebase"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 const menuItems = [
   {
@@ -38,20 +41,32 @@ const menuItems = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<"aside">) {
   const pathname = usePathname()
+  const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false)
+  const [logoutError, setLogoutError] = useState<string | null>(null)
 
-  const handleLogout = async () => {
-    if (!confirm("Are you sure you want to logout?")) return
+  const openLogoutDialog = () => {
+    setLogoutError(null)
+    setIsLogoutDialogOpen(true)
+  }
+
+  const handleConfirmLogout = async () => {
+    if (isLoggingOut) return
 
     setIsLoggingOut(true)
+    setLogoutError(null)
 
     try {
       console.log("🔐 Logging out...")
-      await firebaseAuth.signOut()
+      const { auth } = await getFirebaseInstances()
+      await auth.signOut()
       console.log("✅ Logout successful")
+      setIsLogoutDialogOpen(false)
+      router.push("/")
     } catch (error) {
       console.error("❌ Logout error:", error)
-      alert("Logout failed. Please try again.")
+      setLogoutError("Logout failed. Please try again.")
     } finally {
       setIsLoggingOut(false)
     }
@@ -90,29 +105,60 @@ export function AppSidebar({ ...props }: React.ComponentProps<"aside">) {
               <span>{item.title}</span>
             </Link>
           ))}
+
+          {/* Logout item under Settings */}
+          <button
+            type="button"
+            onClick={openLogoutDialog}
+            className="mt-2 flex w-full items-center space-x-3 px-3 py-2 rounded-md text-radio-red hover:bg-radio-red/10 transition-colors"
+          >
+            <LogOut className="h-5 w-5" />
+            <span>Logout</span>
+          </button>
         </div>
       </nav>
 
-      {/* Footer */}
-      <div className="p-4">
-        <button
-          onClick={handleLogout}
-          disabled={isLoggingOut}
-          className="flex items-center space-x-3 px-3 py-2 text-white hover:bg-radio-gray/20 rounded-md w-full transition-colors disabled:opacity-50"
-        >
-          {isLoggingOut ? (
-            <>
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              <span>Logging out...</span>
-            </>
-          ) : (
-            <>
-              <LogOut className="h-5 w-5" />
-              <span>Logout</span>
-            </>
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={isLogoutDialogOpen} onOpenChange={(open) => !isLoggingOut && setIsLogoutDialogOpen(open)}>
+        <DialogContent className="bg-radio-black border-radio-gold text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Logout</DialogTitle>
+            <DialogDescription className="text-white/70">
+              Are you sure you want to log out of the dashboard? You will need to log in again to access your content.
+            </DialogDescription>
+          </DialogHeader>
+
+          {logoutError && (
+            <Alert className="mb-4 border-radio-red/50 bg-radio-red/10">
+              <AlertCircle className="h-4 w-4 text-radio-red" />
+              <AlertDescription className="text-radio-red font-medium">
+                {logoutError}
+              </AlertDescription>
+            </Alert>
           )}
-        </button>
-      </div>
+
+          <div className="flex space-x-4 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsLogoutDialogOpen(false)}
+              className="flex-1 border-white/20 text-white hover:bg-white/10 bg-transparent"
+              disabled={isLoggingOut}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmLogout}
+              className="flex-1 bg-radio-gold text-radio-black hover:bg-radio-gold/90"
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? "Logging out..." : "Logout"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </aside>
   )
 }

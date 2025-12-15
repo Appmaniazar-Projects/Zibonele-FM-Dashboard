@@ -210,6 +210,8 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Account / Logout */}
           </div>
         </div>
       </div>
