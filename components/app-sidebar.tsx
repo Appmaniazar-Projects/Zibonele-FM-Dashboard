@@ -86,7 +86,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<"aside">) {
               className="object-contain"
             />
           </div>
-          <div className="text-white/70 text-sm">Welcome, Demo User</div>
         </div>
       </div>
 
