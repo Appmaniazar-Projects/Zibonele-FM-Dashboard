@@ -13,8 +13,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Calendar, MapPin, Edit, Trash2, Clock, Plus, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
 import { addEvent, updateEvent, deleteEvent, subscribeToEvents, type Event } from "@/lib/firestore/events"
+import { getFirebaseInstances } from "@/lib/firebase"
 import { DashboardLayout } from "@/components/dashboard-layout"
 
 export default function EventsPage() {
@@ -25,6 +27,8 @@ export default function EventsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -81,13 +85,89 @@ export default function EventsPage() {
     setEditingEvent(null)
     setError("")
     setSubmitting(false)
+    setUploadingImage(false)
+    setUploadProgress(null)
+  }
+
+  const handleImageFileSelected = async (file: File | null) => {
+    if (!file) return
+    if (submitting || uploadingImage) return
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    const maxSizeBytes = 5 * 1024 * 1024 // 5MB
+
+    if (!allowedTypes.includes(file.type)) {
+      setError("Please upload an image file (JPG, PNG, WEBP, or GIF).")
+      return
+    }
+    if (file.size > maxSizeBytes) {
+      setError("Image is too large. Please upload an image under 5MB.")
+      return
+    }
+
+    setError("")
+    setUploadingImage(true)
+    setUploadProgress(0)
+
+    try {
+      const { storage } = await getFirebaseInstances()
+      if (!storage) {
+        throw new Error("Firebase Storage is not configured. Set NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET and restart.")
+      }
+
+      const { ref, uploadBytesResumable, getDownloadURL } = await import("firebase/storage")
+      const safeTitle = (formData.title || "event")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg"
+      const objectPath = `events/${safeTitle || "event"}/${Date.now()}.${ext}`
+      const storageRef = ref(storage, objectPath)
+
+      const task = uploadBytesResumable(storageRef, file, {
+        contentType: file.type,
+        cacheControl: "public,max-age=31536000",
+      })
+
+      const downloadUrl: string = await new Promise((resolve, reject) => {
+        task.on(
+          "state_changed",
+          (snapshot) => {
+            if (snapshot.totalBytes > 0) {
+              const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
+              setUploadProgress(pct)
+            }
+          },
+          (err) => reject(err),
+          async () => {
+            try {
+              const url = await getDownloadURL(task.snapshot.ref)
+              resolve(url)
+            } catch (e) {
+              reject(e)
+            }
+          }
+        )
+      })
+
+      setFormData((prev) => ({ ...prev, imageUrl: downloadUrl }))
+      setSuccess("Image uploaded successfully.")
+    } catch (e) {
+      console.error("Error uploading event image:", e)
+      setError(e instanceof Error ? e.message : "Failed to upload image. Please try again.")
+    } finally {
+      setUploadingImage(false)
+      setUploadProgress(null)
+    }
   }
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (submitting) return
+    if (submitting || uploadingImage) return
 
     console.log("Form submitted:", formData)
     setSubmitting(true)
@@ -384,7 +464,56 @@ export default function EventsPage() {
                   value={formData.imageUrl}
                   onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                   className="bg-white/10 border-white/20 text-white"
-                  disabled={submitting}
+                  disabled={submitting || uploadingImage}
+                />
+
+                <div className="mt-3 flex items-center gap-3">
+                  <Button
+                    type="button"
+                    className="bg-radio-gold text-radio-black hover:bg-radio-gold/90"
+                    disabled={submitting || uploadingImage}
+                    onClick={() => document.getElementById("eventImageFile")?.click()}
+                  >
+                    {uploadingImage ? (
+                      <div className="flex items-center">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Uploading{uploadProgress !== null ? ` (${uploadProgress}%)` : "..."}
+                      </div>
+                    ) : (
+                      "Upload Image"
+                    )}
+                  </Button>
+
+                  {formData.imageUrl ? (
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={formData.imageUrl} alt="Event image preview" />
+                        <AvatarFallback className="bg-white/10 text-white">IMG</AvatarFallback>
+                      </Avatar>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-radio-red text-radio-red hover:bg-radio-red hover:text-white bg-transparent"
+                        disabled={submitting || uploadingImage}
+                        onClick={() => setFormData({ ...formData, imageUrl: "" })}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+
+                <input
+                  id="eventImageFile"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] || null
+                    e.target.value = ""
+                    void handleImageFileSelected(f)
+                  }}
+                  disabled={submitting || uploadingImage}
                 />
               </div>
 
@@ -411,7 +540,7 @@ export default function EventsPage() {
                 <Button
                   type="submit"
                   className="flex-1 bg-radio-gold text-radio-black hover:bg-radio-gold/90"
-                  disabled={submitting}
+                  disabled={submitting || uploadingImage}
                 >
                   {submitting ? (
                     <div className="flex items-center">

@@ -1,27 +1,28 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
+import { DashboardLayout } from "@/components/dashboard-layout"
 import { FloatingActionButton } from "@/components/floating-action-button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Edit, Trash2, Plus, Clock, Radio, Mail, Phone, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { getFirebaseInstances } from "@/lib/firebase"
 import {
   addProfile,
-  updateProfile,
   deleteProfile,
   subscribeToProfiles,
+  updateProfile,
   type Profile,
 } from "@/lib/firestore/profiles"
-import { DashboardLayout } from "@/components/dashboard-layout"
+import { AlertCircle, CheckCircle, Clock, Edit, Loader2, Mail, Phone, Plus, Radio, Trash2 } from "lucide-react"
+import type React from "react"
+import { useEffect, useState } from "react"
 
 export default function PresentersPage() {
   const [presenters, setPresenters] = useState<Profile[]>([])
@@ -31,6 +32,8 @@ export default function PresentersPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -87,13 +90,90 @@ export default function PresentersPage() {
     setEditingPresenter(null)
     setError("")
     setSubmitting(false)
+    setUploadingImage(false)
+    setUploadProgress(null)
+  }
+
+  const handleImageFileSelected = async (file: File | null) => {
+    if (!file) return
+    if (submitting || uploadingImage) return
+
+    // Basic validation
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    const maxSizeBytes = 5 * 1024 * 1024 // 5MB
+
+    if (!allowedTypes.includes(file.type)) {
+      setError("Please upload an image file (JPG, PNG, WEBP, or GIF).")
+      return
+    }
+    if (file.size > maxSizeBytes) {
+      setError("Image is too large. Please upload an image under 5MB.")
+      return
+    }
+
+    setError("")
+    setUploadingImage(true)
+    setUploadProgress(0)
+
+    try {
+      const { storage } = await getFirebaseInstances()
+      if (!storage) {
+        throw new Error("Firebase Storage is not configured. Set NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET and restart.")
+      }
+
+      const { ref, uploadBytesResumable, getDownloadURL } = await import("firebase/storage")
+      const safeName = (formData.name || "presenter")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg"
+      const objectPath = `presenters/${safeName || "presenter"}/${Date.now()}.${ext}`
+      const storageRef = ref(storage, objectPath)
+
+      const task = uploadBytesResumable(storageRef, file, {
+        contentType: file.type,
+        cacheControl: "public,max-age=31536000",
+      })
+
+      const downloadUrl: string = await new Promise((resolve, reject) => {
+        task.on(
+          "state_changed",
+          (snapshot) => {
+            if (snapshot.totalBytes > 0) {
+              const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
+              setUploadProgress(pct)
+            }
+          },
+          (err) => reject(err),
+          async () => {
+            try {
+              const url = await getDownloadURL(task.snapshot.ref)
+              resolve(url)
+            } catch (e) {
+              reject(e)
+            }
+          }
+        )
+      })
+
+      setFormData((prev) => ({ ...prev, imageUrl: downloadUrl }))
+      setSuccess("Image uploaded successfully.")
+    } catch (e) {
+      console.error("Error uploading image:", e)
+      setError(e instanceof Error ? e.message : "Failed to upload image. Please try again.")
+    } finally {
+      setUploadingImage(false)
+      setUploadProgress(null)
+    }
   }
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (submitting) return
+    if (submitting || uploadingImage) return
 
     console.log("Form submitted:", formData)
     setSubmitting(true)
@@ -420,7 +500,57 @@ export default function PresentersPage() {
                   value={formData.imageUrl}
                   onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                   className="bg-white/10 border-white/20 text-white"
-                  disabled={submitting}
+                  disabled={submitting || uploadingImage}
+                />
+
+                <div className="mt-3 flex items-center gap-3">
+                  <Button
+                    type="button"
+                    className="bg-radio-gold text-radio-black hover:bg-radio-gold/90"
+                    disabled={submitting || uploadingImage}
+                    onClick={() => document.getElementById("presenterImageFile")?.click()}
+                  >
+                    {uploadingImage ? (
+                      <div className="flex items-center">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Uploading{uploadProgress !== null ? ` (${uploadProgress}%)` : "..."}
+                      </div>
+                    ) : (
+                      "Upload Image"
+                    )}
+                  </Button>
+
+                  {formData.imageUrl ? (
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={formData.imageUrl} alt="Presenter image preview" />
+                        <AvatarFallback className="bg-white/10 text-white">IMG</AvatarFallback>
+                      </Avatar>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-radio-red text-radio-red hover:bg-radio-red hover:text-white bg-transparent"
+                        disabled={submitting || uploadingImage}
+                        onClick={() => setFormData({ ...formData, imageUrl: "" })}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+
+                <input
+                  id="presenterImageFile"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] || null
+                    // Allow selecting the same file again
+                    e.target.value = ""
+                    void handleImageFileSelected(f)
+                  }}
+                  disabled={submitting || uploadingImage}
                 />
               </div>
 
@@ -447,7 +577,7 @@ export default function PresentersPage() {
                 <Button
                   type="submit"
                   className="flex-1 bg-radio-gold text-radio-black hover:bg-radio-gold/90"
-                  disabled={submitting}
+                  disabled={submitting || uploadingImage}
                 >
                   {submitting ? (
                     <div className="flex items-center">

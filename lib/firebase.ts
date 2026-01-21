@@ -53,6 +53,7 @@ const initializeFirebase = async (forceReinit = false) => {
     const { initializeApp } = await import("firebase/app")
     const { getAuth } = await import("firebase/auth")
     const { getDatabase } = await import("firebase/database")
+    const { getStorage } = await import("firebase/storage")
 
     const firebaseConfig = {
       apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -98,6 +99,18 @@ const initializeFirebase = async (forceReinit = false) => {
       } catch (dbError) {
         console.warn("⚠️ Could not initialize Realtime Database:", dbError)
         // Continue even if database fails
+      }
+    }
+
+    // Initialize Storage
+    if (!storage) {
+      console.log("🔥 Initializing Storage...")
+      try {
+        storage = getStorage(app)
+        console.log("✅ Firebase Storage initialized")
+      } catch (storageError) {
+        console.warn("⚠️ Could not initialize Firebase Storage:", storageError)
+        // Continue even if storage fails
       }
     }
     
@@ -230,7 +243,7 @@ export const getFirebaseInstances = async () => {
 // Export static instances
 export { app }
 export const firebaseAuth = auth || mockAuth // Export for compatibility
-export const firebaseStorage = null
+export const firebaseStorage = storage
 
 // Utility functions
 export const serverTimestamp = () => Date.now()
